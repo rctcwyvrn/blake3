@@ -3,13 +3,16 @@ package com.github.rctcwyvrn.blake3java;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
-import java.util.List;
+
+import static java.lang.Integer.rotateRight;
 
 /**
  * Translation of the Blake3 reference implemenetation from Rust/C to Java
  * Author: rctcwyvrn
  */
 public class Blake3 {
+    private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
+
     private static final int OUT_LEN = 32;
     private static final int KEY_LEN = 32;
     private static final int BLOCK_LEN = 64;
@@ -32,12 +35,13 @@ public class Blake3 {
     };
 
     private static int wrappingAdd(int a, int b){
-        return (a + b); //Should be mod something, ill figure it out
+        return (a + b); //TODO: Should be mod something, ill figure it out
     }
 
-    private static int rotateRight(int x, int len){
-        return (x >> len) | (x << (32 - len));
-    }
+    // TODO: Does java's rotate right work? It uses the two's complement signed representation right? Does this function work or does the java one?
+//    private static int rotateRight(int x, int len){
+//        return (x >> len) | (x << (32 - len));
+//    }
 
     private static void g(int[] state, int a, int b, int c, int d, int mx, int my){
         state[a] = wrappingAdd(wrappingAdd(state[a], state[b]), mx);
@@ -93,50 +97,49 @@ public class Blake3 {
                 blockLen,
                 flags
         };
-        // Round 1
-        roundFn(state, blockWords);
+        roundFn(state, blockWords);         // Round 1
         blockWords = permute(blockWords);
-        // Round 2
-        roundFn(state, blockWords);
+        roundFn(state, blockWords);         // Round 2
         blockWords = permute(blockWords);
-        // Round 3
-        roundFn(state, blockWords);
+        roundFn(state, blockWords);         // Round 3
         blockWords = permute(blockWords);
-        // Round 4
-        roundFn(state, blockWords);
+        roundFn(state, blockWords);         // Round 4
         blockWords = permute(blockWords);
-        // Round 5
-        roundFn(state, blockWords);
+        roundFn(state, blockWords);         // Round 5
         blockWords = permute(blockWords);
-        // Round 6
-        roundFn(state, blockWords);
+        roundFn(state, blockWords);         // Round 6
         blockWords = permute(blockWords);
-        // Round 7
-        roundFn(state, blockWords);
+        roundFn(state, blockWords);         // Round 7
 
+        for(int i = 0; i<8; i++){
+            state[i] ^= state[i+8];
+            state[i+8] ^= chainingValue[i];
+        }
         return state;
     }
 
-    // FIXME: i can probably do this more cleanly with the other bytebuffer methods (one buf, specify different start/stop indicies?)
     private static int[] wordsFromLEBytes(byte[] bytes){
-        int[] words = new int[bytes.length/4];
-        for(int i = 0; i< bytes.length/4; i++){
-            byte[] arr = Arrays.copyOfRange(bytes, i, i+5);
-            ByteBuffer buf = ByteBuffer.wrap(arr);
-            buf.order(ByteOrder.LITTLE_ENDIAN);
-            words[i] = buf.getInt();
+        if ((bytes.length != 64)) throw new AssertionError();
+        int[] words = new int[16];
+        ByteBuffer buf = ByteBuffer.wrap(bytes);
+        buf.order(ByteOrder.LITTLE_ENDIAN);
+        for(int i = 0; i<16; i++){
+            words[i] = buf.getInt(i*4);
         }
         return words;
     }
 
-    private static class Output {
+    // Node of the Blake3 hash tree
+    // Is either chained into the next node using chainingValue()
+    // Or used to calculate the hash digest using rootOutputBytes()
+    private static class Node {
         int[] inputChainingValue;
         int[] blockWords;
         long counter;
         int blockLen;
         int flags;
 
-        private Output(int[] inputChainingValue, int[] blockWords, long counter, int blockLen, int flags) {
+        private Node(int[] inputChainingValue, int[] blockWords, long counter, int blockLen, int flags) {
             this.inputChainingValue = inputChainingValue;
             this.blockWords = blockWords;
             this.counter = counter;
@@ -144,35 +147,28 @@ public class Blake3 {
             this.flags = flags;
         }
 
+        // Return the 8 int CV
         private int[] chainingValue(){
             return Arrays.copyOfRange(
-                    compress(
-                            inputChainingValue,
-                            blockWords,
-                            counter,
-                            blockLen,
-                            flags
-                    ),0,9
-            );
+                    compress(inputChainingValue, blockWords, counter, blockLen, flags),
+                    0,8);
         }
 
         private byte[] rootOutputBytes(int outLen){
             int outputCounter = 0;
-            int outputsNeeded = outLen/(2*OUT_LEN);
+            int outputsNeeded = Math.floorDiv(outLen,(2*OUT_LEN)) + 1;
             byte[] hash = new byte[outLen];
             int i = 0;
             while(outputCounter < outputsNeeded){
-                int[] words = compress(
-                        inputChainingValue,
-                        blockWords,
-                        outputCounter,
-                        blockLen,
-                        flags | ROOT
-                );
+                int[] words = compress(inputChainingValue, blockWords, outputCounter, blockLen,flags | ROOT );
+
                 for(int word: words){
                     for(byte b: ByteBuffer.allocate(4).putInt(word).array()){
                         hash[i] = b;
                         i+=1;
+                        if(i == outLen){
+                            return hash;
+                        }
                     }
                 }
                 outputCounter+=1;
@@ -181,10 +177,11 @@ public class Blake3 {
         }
     }
 
+    // Helper object for creating new Nodes and chaining them
     private class ChunkState {
         int[] chainingValue;
         int chunkCounter;
-        byte[] block = new byte[BLOCK_LEN];
+        byte[] block = new byte[64];
         byte blockLen = 0;
         byte blocksCompressed = 0;
         int flags;
@@ -205,65 +202,33 @@ public class Blake3 {
 
         private void update(byte[] input) {
             while (input.length != 0) {
+
+                // Chain the next 64 byte block into this chunk/node
                 if (blockLen == BLOCK_LEN) {
                     int[] blockWords = wordsFromLEBytes(block);
                     this.chainingValue = Arrays.copyOfRange(
-                            compress(
-                                    this.chainingValue,
-                                    blockWords,
-                                    this.chunkCounter,
-                                    BLOCK_LEN,
-                                    this.flags | this.startFlag()
-                            ), 0, 9);
+                            compress(this.chainingValue, blockWords, this.chunkCounter, BLOCK_LEN,this.flags | this.startFlag()),
+                            0, 8);
                     blocksCompressed += 1;
-                    this.block = new byte[BLOCK_LEN];
+                    this.block = new byte[64];
                     this.blockLen = 0;
                 }
 
                 // Take bytes out of the input and update
                 int want = BLOCK_LEN - this.blockLen; // How many bytes we need to fill up the current block
                 int canTake = Math.min(want, input.length);
-                block = Arrays.copyOfRange(input, 0, canTake + 1);
+                for(int i = 0; i < canTake; i++){
+                    block[blockLen + i] = input[i];
+                }
+
                 blockLen += canTake;
-                input = Arrays.copyOfRange(input, canTake + 1, input.length); //TODO: check with debugger for off by one stuff here
+                input = Arrays.copyOfRange(input, canTake, input.length);
             }
         }
 
-        private Output createOutput(){
-            int[] blockWords = wordsFromLEBytes(block);
-            return new Output(
-                chainingValue,
-                    blockWords,
-                    blockLen,
-                    chunkCounter,
-                    flags | startFlag() | CHUNK_END
-            );
+        private Node createNode(){
+            return new Node(chainingValue, wordsFromLEBytes(block), blockLen, chunkCounter, flags | startFlag() | CHUNK_END);
         }
-    }
-
-    // This is disgusting, there has to be a better way
-    private static Output parentOutput(int[] leftChild, int[] rightChild, int[] key, int flags){
-        int[] blockWords = new int[16];
-        int i = 0;
-        for(int x: leftChild){
-            blockWords[i] = x;
-            i+=1;
-        }
-        for(int x: rightChild){
-            blockWords[i] = x;
-            i+=1;
-        }
-        return new Output(
-                key,
-                blockWords,
-                0,
-                BLOCK_LEN,
-                PARENT | flags
-        );
-    }
-
-    private static int[] parentCV(int[] leftChild, int[] rightChild, int[] key, int flags){
-        return parentOutput(leftChild, rightChild, key, flags).chainingValue();
     }
 
     // Hasher
@@ -301,6 +266,25 @@ public class Blake3 {
         return cvStack[cvStackLen];
     }
 
+    // Combines the chaining values of two children to create the parent node
+    private static Node parentNode(int[] leftChildCV, int[] rightChildCV, int[] key, int flags){
+        int[] blockWords = new int[16];
+        int i = 0;
+        for(int x: leftChildCV){
+            blockWords[i] = x;
+            i+=1;
+        }
+        for(int x: rightChildCV){
+            blockWords[i] = x;
+            i+=1;
+        }
+        return new Node(key, blockWords, 0, BLOCK_LEN, PARENT | flags);
+    }
+
+    private static int[] parentCV(int[] leftChildCV, int[] rightChildCV, int[] key, int flags){
+        return parentNode(leftChildCV, rightChildCV, key, flags).chainingValue();
+    }
+
     private void addChunkChainingValue(int[] newCV, long totalChunks){
         while((totalChunks & 1) == 0){
             newCV = parentCV(popStack(), newCV, key, flags);
@@ -310,30 +294,53 @@ public class Blake3 {
     }
 
     public void update(byte[] input){
-        if(chunkState.len() == CHUNK_LEN){
-            int[] chunkCV = chunkState.createOutput().chainingValue();
-            int totalChunks = chunkState.chunkCounter + 1;
-            addChunkChainingValue(chunkCV, totalChunks);
-        }
+        while(input.length != 0) {
 
-        int want = CHUNK_LEN - chunkState.len();
-        int take = Math.min(want, input.length);
-        chunkState.update(Arrays.copyOfRange(input, 0, take + 1));
-        input = Arrays.copyOfRange(input, take + 1, input.length);
+            // If this chunk has chained in 16 64 bytes of input, add it's CV to the stack
+            if (chunkState.len() == CHUNK_LEN) {
+                int[] chunkCV = chunkState.createNode().chainingValue();
+                int totalChunks = chunkState.chunkCounter + 1;
+                addChunkChainingValue(chunkCV, totalChunks);
+                chunkState = new ChunkState(key, totalChunks, flags);
+            }
+
+            int want = CHUNK_LEN - chunkState.len();
+            int take = Math.min(want, input.length);
+            chunkState.update(Arrays.copyOfRange(input, 0, take));
+            input = Arrays.copyOfRange(input, take, input.length);
+        }
     }
 
     public byte[] digest(int hashLen){
-        Output output = this.chunkState.createOutput();
+        Node node = this.chunkState.createNode();
         int parentNodesRemaining = cvStackLen;
         while(parentNodesRemaining > 0){
             parentNodesRemaining -=1;
-            output = parentOutput(
+            node = parentNode(
                     cvStack[parentNodesRemaining],
-                    output.chainingValue(),
+                    node.chainingValue(),
                     key,
                     flags
             );
         }
-        return output.rootOutputBytes(hashLen);
+        return node.rootOutputBytes(hashLen);
+    }
+
+    public String hexdigest(int hashLen){
+        return bytesToHex(digest(hashLen));
+    }
+
+    public String hexdigest(){
+        return hexdigest(32);
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars);
     }
 }
