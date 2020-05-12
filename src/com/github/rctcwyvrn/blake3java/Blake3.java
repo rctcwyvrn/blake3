@@ -18,13 +18,13 @@ public class Blake3 {
     private static final int BLOCK_LEN = 64;
     private static final int CHUNK_LEN = 1024;
 
-    private static final int CHUNK_START = 1;
-    private static final int CHUNK_END = 2;
-    private static final int PARENT = 4;
-    private static final int ROOT = 8;
-    private static final int KEYED_HASH = 16;
-    private static final int DERIVE_KEY_CONTEXT = 32;
-    private static final int DERIVE_KEY_MATERIAL = 64;
+    private static final long CHUNK_START = 1;
+    private static final long CHUNK_END = 2;
+    private static final long PARENT = 4;
+    private static final long ROOT = 8;
+    private static final long KEYED_HASH = 16;
+    private static final long DERIVE_KEY_CONTEXT = 32;
+    private static final long DERIVE_KEY_MATERIAL = 64;
 
     private static final long[] IV = {
             0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
@@ -35,11 +35,9 @@ public class Blake3 {
     };
 
     private static long wrappingAdd(long a, long b){
-        return (a + b) & 0xffffffffL; //TODO: Should be mod something, ill figure it out
+        return (a + b) % 0xffffffffL;
     }
 
-    // TODO: Does java's rotate right work? It uses the two's complement signed representation right? Does this function work or does the java one?
-    // Theoretically they should both work as long as the integer values are positive, which they should always be
     private static long rotateRight(long x, int len){
         return ((x >> len) | (x << (32 - len))) & 0xffffffffL;
     }
@@ -77,7 +75,7 @@ public class Blake3 {
         return permuted;
     }
 
-    private static long[] compress(long[] chainingValue, long[] blockWords, long counter, int blockLen, long flags){
+    private static long[] compress(long[] chainingValue, long[] blockWords, long counter, long blockLen, long flags){
         long counterInt =  counter & 0xffffffffL;
         long counterShift = (counter >> 32) & 0xffffffffL;
         long[] state = {
@@ -123,16 +121,14 @@ public class Blake3 {
         if ((bytes.length != 64)) throw new AssertionError();
         long[] words = new long[16];
 
-        //ByteBuffer buf = ByteBuffer.wrap(bytes);
-        ByteBuffer buf = ByteBuffer.allocate(64);
-        for(short b: bytes){
-            buf.put((byte) (b & 0xff));
+        for(int i=0; i<64; i+=4){
+            words[i/4] = (bytes[i + 3] << 24) +
+                    (bytes[i + 2] << 16) +
+                    (bytes[i + 1] << 8) +
+                    (bytes[i]);
         }
 
-        buf.order(ByteOrder.LITTLE_ENDIAN);
-        for(int i = 0; i<16; i++){
-            words[i] = buf.getInt(i*4) & 0xffffffffL;
-        }
+        System.out.println("DEBUG words: " + Arrays.toString(words));
         return words;
     }
 
@@ -143,10 +139,10 @@ public class Blake3 {
         long[] inputChainingValue;
         long[] blockWords;
         long counter;
-        int blockLen;
-        int flags;
+        long blockLen;
+        long flags;
 
-        private Node(long[] inputChainingValue, long[] blockWords, long counter, int blockLen, int flags) {
+        private Node(long[] inputChainingValue, long[] blockWords, long counter, long blockLen, long flags) {
             this.inputChainingValue = inputChainingValue;
             this.blockWords = blockWords;
             this.counter = counter;
@@ -156,19 +152,20 @@ public class Blake3 {
 
         // Return the 8 int CV
         private long[] chainingValue(){
+            long blockLenLong = blockLen;
+            System.out.println(blockLen + " " + blockLenLong);
             return Arrays.copyOfRange(
-                    compress(inputChainingValue, blockWords, counter, blockLen, flags),
+                    compress(inputChainingValue, blockWords, counter, blockLenLong, flags),
                     0,8);
         }
 
-        // Fuck java's lack of unsigned byte >:C
         private short[] rootOutputBytes(int outLen){
             int outputCounter = 0;
             int outputsNeeded = Math.floorDiv(outLen,(2*OUT_LEN)) + 1;
             short[] hash = new short[outLen];
             int i = 0;
             while(outputCounter < outputsNeeded){
-                long[] words = compress(inputChainingValue, blockWords, outputCounter, blockLen,flags | ROOT );
+                long[] words = compress(inputChainingValue, blockWords, outputCounter, blockLen & 0xffffffffL,flags | ROOT );
 
                 for(long word: words){
                     for(byte b: ByteBuffer.allocate(4)
@@ -178,13 +175,14 @@ public class Blake3 {
                         hash[i] = (short) (b & 0xff);
                         i+=1;
                         if(i == outLen){
-                            System.out.println(Arrays.toString(hash));
+                            System.out.println("DEBUG HASH BYTES: " + Arrays.toString(hash));
                             return hash;
                         }
                     }
                 }
                 outputCounter+=1;
             }
+            System.out.println("uhoh, pretty sure this is never supposed to get here");
             return hash;
         }
     }
@@ -196,9 +194,9 @@ public class Blake3 {
         short[] block = new short[BLOCK_LEN];
         byte blockLen = 0;
         byte blocksCompressed = 0;
-        int flags;
+        long flags;
 
-        public ChunkState(long[] key, int chunkCounter, int flags){
+        public ChunkState(long[] key, int chunkCounter, long flags){
             this.chainingValue = key;
             this.chunkCounter = chunkCounter;
             this.flags = flags;
@@ -208,7 +206,7 @@ public class Blake3 {
             return BLOCK_LEN * blocksCompressed + blockLen;
         }
 
-        private int startFlag(){
+        private long startFlag(){
             return blocksCompressed == 0? CHUNK_START: 0;
         }
 
@@ -248,13 +246,13 @@ public class Blake3 {
     private long[] key;
     private long[][] cvStack = new long[54][];
     private byte cvStackLen = 0;
-    private int flags;
+    private long flags;
 
     public Blake3(){
         this(IV,0);
     }
 
-    public Blake3(long[] key, int flags){
+    public Blake3(long[] key, long flags){
         this.chunkState = new ChunkState(key, 0, flags);
         this.key = key;
         this.flags = flags;
@@ -279,7 +277,7 @@ public class Blake3 {
     }
 
     // Combines the chaining values of two children to create the parent node
-    private static Node parentNode(long[] leftChildCV, long[] rightChildCV, long[] key, int flags){
+    private static Node parentNode(long[] leftChildCV, long[] rightChildCV, long[] key, long flags){
         long[] blockWords = new long[16];
         int i = 0;
         for(long x: leftChildCV){
@@ -293,7 +291,7 @@ public class Blake3 {
         return new Node(key, blockWords, 0, BLOCK_LEN, PARENT | flags);
     }
 
-    private static long[] parentCV(long[] leftChildCV, long[] rightChildCV, long[] key, int flags){
+    private static long[] parentCV(long[] leftChildCV, long[] rightChildCV, long[] key, long flags){
         return parentNode(leftChildCV, rightChildCV, key, flags).chainingValue();
     }
 
