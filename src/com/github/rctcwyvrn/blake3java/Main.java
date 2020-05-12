@@ -1,5 +1,7 @@
 package com.github.rctcwyvrn.blake3java;
 
+import javax.swing.*;
+import java.nio.charset.Charset;
 import java.util.Arrays;
 
 public class Main {
@@ -12,14 +14,12 @@ public class Main {
 //        System.out.println(Arrays.toString(Arrays.copyOfRange(input, 4 + 1, input.length)));
 
         Blake3 hasher = new Blake3();
-//        hasher.update("AAAAAAAAAAAAAAAA".getBytes());
-//        hasher.update("AAAAAAAAAAAAAAAA".getBytes());
-//        hasher.update("AAAAAAAAAAAAAAAA".getBytes());
-//        hasher.update("AAAAAAAAAAAAAAAA".getBytes());
-//        hasher.update("AAAAAAAAAAAAAAAA".getBytes());
+//        hasher.update("AAAAAAAAAAAAAAAA");
 
-        hasher.update("abc".getBytes());
-        hasher.update("def".getBytes());
+        //hasher.update("abc");
+        //hasher.update("def");
+
+        hasher.update("This is a string"); //Should be 718b749f12a61257438b2ea6643555fd995001c9d9ff84764f93f82610a780f2
 
         String hexhash = hasher.hexdigest();
         System.out.println(hexhash);
