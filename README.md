@@ -3,7 +3,7 @@ BLAKE3 in Java
 A completely unoptimized translation of the blake3 reference implementation from rust to java.
 Useful for if you want a single file implementation of blake3 with no dependencies and don't care about speed.
 
-If what you are java bindings for blake3 that are fully optimized try: https://github.com/sken77/BLAKE3jni
+### Examples
 ```java
         // Hashing strings
         Blake3 hasher = new Blake3();
@@ -17,3 +17,5 @@ If what you are java bindings for blake3 that are fully optimized try: https://g
         fileHasher.updateFile(filename);
         String filehash = fileHasher.hexdigest();
 ```
+
+If what you are java bindings for a fully optimized blake3, try: https://github.com/sken77/BLAKE3jni
