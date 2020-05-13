@@ -4,11 +4,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
 
-import static java.lang.Integer.rotateRight;
-
 /**
  * Translation of the Blake3 reference implemenetation from Rust/C to Java
- * Author: rctcwyvrn
+ * BLAKE3 Source: https://github.com/BLAKE3-team/BLAKE3
+ * Translator: rctcwyvrn
  */
 public class Blake3 {
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
@@ -18,16 +17,16 @@ public class Blake3 {
     private static final int BLOCK_LEN = 64;
     private static final int CHUNK_LEN = 1024;
 
-    private static final long CHUNK_START = 1;
-    private static final long CHUNK_END = 2;
-    private static final long PARENT = 4;
-    private static final long ROOT = 8;
-    private static final long KEYED_HASH = 16;
-    private static final long DERIVE_KEY_CONTEXT = 32;
-    private static final long DERIVE_KEY_MATERIAL = 64;
+    private static final long CHUNK_START = 1L;
+    private static final long CHUNK_END = 2L;
+    private static final long PARENT = 4L;
+    private static final long ROOT = 8L;
+    private static final long KEYED_HASH = 16L;
+    private static final long DERIVE_KEY_CONTEXT = 32L;
+    private static final long DERIVE_KEY_MATERIAL = 64L;
 
     private static final long[] IV = {
-            0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
+            0x6A09E667L, 0xBB67AE85L, 0x3C6EF372L, 0xA54FF53AL, 0x510E527FL, 0x9B05688CL, 0x1F83D9ABL, 0x5BE0CD19L
     };
 
     private static final int[] MSG_PERMUTATION = {
@@ -35,7 +34,7 @@ public class Blake3 {
     };
 
     private static long wrappingAdd(long a, long b){
-        return (a + b) % 0xffffffffL;
+        return (a + b) % 0x100000000L;
     }
 
     private static long rotateRight(long x, int len){
@@ -121,14 +120,12 @@ public class Blake3 {
         if ((bytes.length != 64)) throw new AssertionError();
         long[] words = new long[16];
 
-        for(int i=0; i<64; i+=4){
-            words[i/4] = (bytes[i + 3] << 24) +
+        for(int i=0; i<64; i+=4) {
+            words[i / 4] = (bytes[i + 3] << 24) +
                     (bytes[i + 2] << 16) +
                     (bytes[i + 1] << 8) +
                     (bytes[i]);
         }
-
-        System.out.println("DEBUG words: " + Arrays.toString(words));
         return words;
     }
 
@@ -153,7 +150,6 @@ public class Blake3 {
         // Return the 8 int CV
         private long[] chainingValue(){
             long blockLenLong = blockLen;
-            System.out.println(blockLen + " " + blockLenLong);
             return Arrays.copyOfRange(
                     compress(inputChainingValue, blockWords, counter, blockLenLong, flags),
                     0,8);
@@ -175,15 +171,15 @@ public class Blake3 {
                         hash[i] = (short) (b & 0xff);
                         i+=1;
                         if(i == outLen){
-                            System.out.println("DEBUG HASH BYTES: " + Arrays.toString(hash));
                             return hash;
                         }
                     }
                 }
                 outputCounter+=1;
             }
-            System.out.println("uhoh, pretty sure this is never supposed to get here");
-            return hash;
+            System.out.println("Uhoh, pretty sure this is never supposed to get here");
+            System.exit(1);
+            return null;
         }
     }
 
@@ -237,7 +233,7 @@ public class Blake3 {
         }
 
         private Node createNode(){
-            return new Node(chainingValue, wordsFromLEBytes(block), blockLen, chunkCounter, flags | startFlag() | CHUNK_END);
+            return new Node(chainingValue, wordsFromLEBytes(block), chunkCounter, blockLen, flags | startFlag() | CHUNK_END);
         }
     }
 
