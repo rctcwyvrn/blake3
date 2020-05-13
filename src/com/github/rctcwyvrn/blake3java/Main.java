@@ -19,7 +19,7 @@ public class Main {
             Blake3 fileHasher = new Blake3();
             fileHasher.updateFile(filename);
             String filehash = fileHasher.hexdigest();
-            if (!filehash.equals("86894a68f93452be698f7ec97bc932df093f9905a52df73226cee2d713bf5323"))
+            if (!filehash.equals("69e9f8035cf1995c97ad9ba02da4fa2cf532ae8072d428c8667ba20e029e2d84"))
                 throw new AssertionError();
             System.out.println("Success: " + filehash);
         } catch (IOException e) {
