@@ -309,17 +309,13 @@ public class Blake3 {
         updateRaw(converted);
     }
 
-    public void updateFile(String filename){
-        try {
-            byte[] fileContent = Files.readAllBytes(Paths.get(filename));
-            short[] converted = new short[fileContent.length];
-            for(int i = 0; i<fileContent.length; i++){
-                converted[i] = (short) (0xff & fileContent[i]);
-            }
-            updateRaw(converted);
-        } catch (IOException e) {
-            System.err.println("File not found: " + filename);
+    public void updateFile(String filename) throws IOException {
+        byte[] fileContent = Files.readAllBytes(Paths.get(filename));
+        short[] converted = new short[fileContent.length];
+        for(int i = 0; i<fileContent.length; i++){
+            converted[i] = (short) (0xff & fileContent[i]);
         }
+        updateRaw(converted);
     }
     private void updateRaw(short[] input){
         while(input.length != 0) {

@@ -1,5 +1,7 @@
 package com.github.rctcwyvrn.blake3java;
 
+import java.io.IOException;
+
 public class Main {
     public static void main(String[] args){
 
@@ -13,10 +15,15 @@ public class Main {
         // Hashing files
         // Warning: Very slow due to lack of optimizations :c
         String filename = "src/com/github/rctcwyvrn/blake3java/Blake3.java";
-        Blake3 fileHasher = new Blake3();
-        fileHasher.updateFile(filename);
-        String filehash = fileHasher.hexdigest();
-        if(!filehash.equals("5110a18d7e9595629ea32c87337662f6b1247b970e38dac117c47778955200de")) throw new AssertionError();
-        System.out.println("Success: " + filehash);
+        try {
+            Blake3 fileHasher = new Blake3();
+            fileHasher.updateFile(filename);
+            String filehash = fileHasher.hexdigest();
+            if (!filehash.equals("86894a68f93452be698f7ec97bc932df093f9905a52df73226cee2d713bf5323"))
+                throw new AssertionError();
+            System.out.println("Success: " + filehash);
+        } catch (IOException e) {
+            System.err.println("File not found: " + filename);
+        }
     }
 }
