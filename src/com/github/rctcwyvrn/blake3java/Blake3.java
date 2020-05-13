@@ -1,7 +1,10 @@
 package com.github.rctcwyvrn.blake3java;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 
 /**
@@ -121,10 +124,10 @@ public class Blake3 {
         long[] words = new long[16];
 
         for(int i=0; i<64; i+=4) {
-            words[i / 4] = (bytes[i + 3] << 24) +
+            words[i/4] = ((bytes[i + 3] << 24) +
                     (bytes[i + 2] << 16) +
                     (bytes[i + 1] << 8) +
-                    (bytes[i]);
+                    (bytes[i])) & 0xffffffffL;
         }
         return words;
     }
@@ -184,7 +187,7 @@ public class Blake3 {
     }
 
     // Helper object for creating new Nodes and chaining them
-    private class ChunkState {
+    private static class ChunkState {
         long[] chainingValue;
         int chunkCounter;
         short[] block = new short[BLOCK_LEN];
@@ -223,9 +226,7 @@ public class Blake3 {
                 // Take bytes out of the input and update
                 int want = BLOCK_LEN - this.blockLen; // How many bytes we need to fill up the current block
                 int canTake = Math.min(want, input.length);
-                for(int i = 0; i < canTake; i++){
-                    block[blockLen + i] = input[i];
-                }
+                if (canTake >= 0) System.arraycopy(input, 0, block, blockLen, canTake);
 
                 blockLen += canTake;
                 input = Arrays.copyOfRange(input, canTake, input.length);
@@ -240,7 +241,7 @@ public class Blake3 {
     // Hasher
     private ChunkState chunkState;
     private long[] key;
-    private long[][] cvStack = new long[54][];
+    private final long[][] cvStack = new long[54][];
     private byte cvStackLen = 0;
     private long flags;
 
@@ -307,7 +308,20 @@ public class Blake3 {
         }
         updateRaw(converted);
     }
-    public void updateRaw(short[] input){
+
+    public void updateFile(String filename){
+        try {
+            byte[] fileContent = Files.readAllBytes(Paths.get(filename));
+            short[] converted = new short[fileContent.length];
+            for(int i = 0; i<fileContent.length; i++){
+                converted[i] = (short) (0xff & fileContent[i]);
+            }
+            updateRaw(converted);
+        } catch (IOException e) {
+            System.err.println("File not found: " + filename);
+        }
+    }
+    private void updateRaw(short[] input){
         while(input.length != 0) {
 
             // If this chunk has chained in 16 64 bytes of input, add it's CV to the stack
@@ -348,7 +362,7 @@ public class Blake3 {
         return hexdigest(32);
     }
 
-    private static String bytesToHex(short[] bytes) {
+    public static String bytesToHex(short[] bytes) {
         char[] hexChars = new char[bytes.length * 2];
         for (int j = 0; j < bytes.length; j++) {
             int v = bytes[j] & 0xFF;
