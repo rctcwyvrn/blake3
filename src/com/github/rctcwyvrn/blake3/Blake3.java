@@ -1,15 +1,16 @@
 package com.github.rctcwyvrn.blake3;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.Arrays;
 
 /**
- * Translation of the Blake3 reference implemenetation from Rust to Java
+ * Translation of the Blake3 reference implementation from Rust to Java
  * BLAKE3 Source: https://github.com/BLAKE3-team/BLAKE3
  * Translator: rctcwyvrn
  */
@@ -207,7 +208,8 @@ public class Blake3 {
         }
 
         private void update(byte[] input) {
-            while (input.length != 0) {
+            int currPos = 0;
+            while (currPos < input.length) {
 
                 // Chain the next 64 byte block into this chunk/node
                 if (blockLen == BLOCK_LEN) {
@@ -222,11 +224,11 @@ public class Blake3 {
 
                 // Take bytes out of the input and update
                 int want = BLOCK_LEN - this.blockLen; // How many bytes we need to fill up the current block
-                int canTake = Math.min(want, input.length);
-                if (canTake >= 0) System.arraycopy(input, 0, block, blockLen, canTake);
+                int canTake = Math.min(want, input.length - currPos);
 
+                System.arraycopy(input, currPos, block, blockLen, canTake);
                 blockLen += canTake;
-                input = Arrays.copyOfRange(input, canTake, input.length);
+                currPos+=canTake;
             }
         }
 
@@ -283,7 +285,18 @@ public class Blake3 {
      * @throws IOException If the file does not exist
      */
     public void update(File file) throws IOException {
-        update(Files.readAllBytes(file.toPath()));
+        // Update the hasher 4kb at a time to avoid memory issues when hashing large files
+        try(InputStream ios = new FileInputStream(file)){
+            byte[] buffer = new byte[4096];
+            int read = 0;
+            while((read = ios.read(buffer)) != -1){
+                if(read == buffer.length) {
+                    update(buffer);
+                } else {
+                    update(Arrays.copyOfRange(buffer, 0, read));
+                }
+            }
+        }
     }
 
     /**
@@ -291,9 +304,10 @@ public class Blake3 {
      * @param input Data to be added
      */
     public void update(byte[] input){
-        while(input.length != 0) {
+        int currPos = 0;
+        while(currPos < input.length) {
 
-            // If this chunk has chained in 16 64 bytes of input, add it's CV to the stack
+            // If this chunk has chained in 16 64 bytes of input, add its CV to the stack
             if (chunkState.len() == CHUNK_LEN) {
                 int[] chunkCV = chunkState.createNode().chainingValue();
                 long totalChunks = chunkState.chunkCounter + 1;
@@ -302,9 +316,9 @@ public class Blake3 {
             }
 
             int want = CHUNK_LEN - chunkState.len();
-            int take = Math.min(want, input.length);
-            chunkState.update(Arrays.copyOfRange(input, 0, take));
-            input = Arrays.copyOfRange(input, take, input.length);
+            int take = Math.min(want, input.length - currPos);
+            chunkState.update(Arrays.copyOfRange(input, currPos, currPos + take));
+            currPos+=take;
         }
     }
 

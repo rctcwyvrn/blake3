@@ -14,14 +14,13 @@ public class Examples {
         System.out.println("Success: " + hexhash);
 
         // Hashing files
-        // Warning: Very slow for large files due to lack of optimizations :c
-        String filename = "LICENSE";
+        String filename = "License";
         try {
             Blake3 fileHasher = new Blake3();
             fileHasher.update(new File(filename));
             String filehash = fileHasher.hexdigest();
             if (!filehash.equals("381f3baeddb0ce5202ac9528ecc787c249901e74528ba2cbc5546567a2e0bd33"))
-                throw new AssertionError();
+                throw new AssertionError(filehash);
             System.out.println("Success: " + filehash);
         } catch (IOException e) {
             System.err.println("File not found: " + filename);
