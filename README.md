@@ -1,8 +1,6 @@
 BLAKE3 in Java
 ---
 An unoptimized translation of the blake3 reference implementation from rust to java.
-Useful for if you want a single file implementation of blake3 with no dependencies, and you don't care about speed.
-
 ### Examples
 ```java
         // Hashing strings
