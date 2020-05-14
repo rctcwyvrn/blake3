@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
@@ -16,6 +18,7 @@ import java.util.Arrays;
 public class Blake3 {
     private static final char[] HEX_ARRAY = "0123456789abcdef".toCharArray();
 
+    private static final int DEFAULT_HASH_LEN = 32;
     private static final int OUT_LEN = 32;
     private static final int KEY_LEN = 32;
     private static final int BLOCK_LEN = 64;
@@ -246,22 +249,113 @@ public class Blake3 {
     private byte cvStackLen = 0;
     private int flags;
 
-    public Blake3(){
-        this(IV,0);
-    }
-
-    public Blake3(int[] key, int flags){
+    private void initialize(int[] key, int flags){
         this.chunkState = new ChunkState(key, 0, flags);
         this.key = key;
         this.flags = flags;
     }
 
-    public Blake3(byte[] key){
-        this(wordsFromLEBytes(key), KEYED_HASH);
+    /**
+     * Construct a default blake3 hasher
+     */
+    public Blake3(){
+        initialize(IV,0);
     }
 
+    /**
+     * Construct a new blake3 keyed hasher
+     * @param key The key
+     */
+    public Blake3(byte[] key){
+        initialize(wordsFromLEBytes(key), KEYED_HASH);
+    }
+
+    /**
+     * Construct a new blake3 key derivation hasher
+     * @param context Context string used to derive keys. The context string should be hardcoded, globally unique, and application-specific
+     */
     public Blake3(String context){
-        Blake3 contextHasher = new Blake3(IV, DERIVE_KEY_CONTEXT);
+        Blake3 contextHasher = new Blake3();
+        contextHasher.initialize(IV, DERIVE_KEY_CONTEXT);
+        contextHasher.update(context.getBytes(StandardCharsets.UTF_8));
+        int[] contextKey = wordsFromLEBytes(contextHasher.digest());
+        initialize(contextKey, DERIVE_KEY_MATERIAL);
+    }
+
+    /**
+     * Append the byte contents of the file to the hash tree
+     * @param file File to be added
+     * @throws IOException If the file does not exist
+     */
+    public void update(File file) throws IOException {
+        update(Files.readAllBytes(file.toPath()));
+    }
+
+    /**
+     * Appends new data to the hash tree
+     * @param input Data to be added
+     */
+    public void update(byte[] input){
+        while(input.length != 0) {
+
+            // If this chunk has chained in 16 64 bytes of input, add it's CV to the stack
+            if (chunkState.len() == CHUNK_LEN) {
+                int[] chunkCV = chunkState.createNode().chainingValue();
+                long totalChunks = chunkState.chunkCounter + 1;
+                addChunkChainingValue(chunkCV, totalChunks);
+                chunkState = new ChunkState(key, totalChunks, flags);
+            }
+
+            int want = CHUNK_LEN - chunkState.len();
+            int take = Math.min(want, input.length);
+            chunkState.update(Arrays.copyOfRange(input, 0, take));
+            input = Arrays.copyOfRange(input, take, input.length);
+        }
+    }
+
+    /**
+     * Generate the blake3 hash for the current tree with the given byte length
+     * @param hashLen The number of bytes of hash to return
+     * @return The byte array representing the hash
+     */
+    public byte[] digest(int hashLen){
+        Node node = this.chunkState.createNode();
+        int parentNodesRemaining = cvStackLen;
+        while(parentNodesRemaining > 0){
+            parentNodesRemaining -=1;
+            node = parentNode(
+                    cvStack[parentNodesRemaining],
+                    node.chainingValue(),
+                    key,
+                    flags
+            );
+        }
+        return node.rootOutputBytes(hashLen);
+    }
+
+    /**
+     * Generate the blake3 hash for the current tree with the default byte length of 32
+     * @return The byte array representing the hash
+     */
+    public byte[] digest(){
+        return digest(DEFAULT_HASH_LEN);
+    }
+
+    /**
+     * Generate the blake3 hash for the current tree with the given byte length
+     * @param hashLen The number of bytes of hash to return
+     * @return The hex string representing the hash
+     */
+    public String hexdigest(int hashLen){
+        return bytesToHex(digest(hashLen));
+    }
+
+    /**
+     * Generate the blake3 hash for the current tree with the default byte length of 32
+     * @return The hex string representing the hash
+     */
+    public String hexdigest(){
+        return hexdigest(DEFAULT_HASH_LEN);
     }
 
     private void pushStack(int[] cv){
@@ -299,51 +393,6 @@ public class Blake3 {
             totalChunks >>=1;
         }
         pushStack(newCV);
-    }
-
-    public void update(File file) throws IOException {
-        update(Files.readAllBytes(file.toPath()));
-    }
-
-    public void update(byte[] input){
-        while(input.length != 0) {
-
-            // If this chunk has chained in 16 64 bytes of input, add it's CV to the stack
-            if (chunkState.len() == CHUNK_LEN) {
-                int[] chunkCV = chunkState.createNode().chainingValue();
-                long totalChunks = chunkState.chunkCounter + 1;
-                addChunkChainingValue(chunkCV, totalChunks);
-                chunkState = new ChunkState(key, totalChunks, flags);
-            }
-
-            int want = CHUNK_LEN - chunkState.len();
-            int take = Math.min(want, input.length);
-            chunkState.update(Arrays.copyOfRange(input, 0, take));
-            input = Arrays.copyOfRange(input, take, input.length);
-        }
-    }
-
-    public byte[] digest(int hashLen){
-        Node node = this.chunkState.createNode();
-        int parentNodesRemaining = cvStackLen;
-        while(parentNodesRemaining > 0){
-            parentNodesRemaining -=1;
-            node = parentNode(
-                    cvStack[parentNodesRemaining],
-                    node.chainingValue(),
-                    key,
-                    flags
-            );
-        }
-        return node.rootOutputBytes(hashLen);
-    }
-
-    public String hexdigest(int hashLen){
-        return bytesToHex(digest(hashLen));
-    }
-
-    public String hexdigest(){
-        return hexdigest(32);
     }
 
     private static String bytesToHex(byte[] bytes) {
