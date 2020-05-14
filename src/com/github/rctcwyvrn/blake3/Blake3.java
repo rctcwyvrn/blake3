@@ -4,14 +4,12 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Arrays;
 
 /**
- * Translation of the Blake3 reference implemenetation from Rust/C to Java
+ * Translation of the Blake3 reference implemenetation from Rust to Java
  * BLAKE3 Source: https://github.com/BLAKE3-team/BLAKE3
  * Translator: rctcwyvrn
  */
@@ -124,18 +122,13 @@ public class Blake3 {
     }
 
     private static int[] wordsFromLEBytes(byte[] bytes){
-        if ((bytes.length != 64)) throw new AssertionError();
-        int[] words = new int[16];
+        if ((bytes.length % 4 != 0)) throw new IllegalStateException();
+        int[] words = new int[bytes.length/4];
         ByteBuffer buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
-        for(int i=0; i<16; i++){
+
+        for(int i=0; i<words.length; i++){
             words[i] = buf.getInt();
         }
-//        for(int i=0; i<64; i+=4) {
-//            words[i/4] = (bytes[i + 3] << 24) +
-//                    (bytes[i + 2] << 16) +
-//                    (bytes[i + 1] << 8) +
-//                    (bytes[i]);
-//        }
         return words;
     }
 
@@ -264,9 +257,11 @@ public class Blake3 {
 
     /**
      * Construct a new blake3 keyed hasher
-     * @param key The key
+     * @param key The 32 byte key
+     * @throws IllegalStateException If the key is not 32 bytes
      */
     public Blake3(byte[] key){
+        if(!(key.length == KEY_LEN)) throw new IllegalStateException("Invalid key length");
         initialize(wordsFromLEBytes(key), KEYED_HASH);
     }
 

@@ -3,8 +3,9 @@ package com.github.rctcwyvrn.blake3;
 import java.io.File;
 import java.io.IOException;
 
-public class Main {
+public class Examples {
     public static void main(String[] args){
+
         // Hashing strings
         Blake3 hasher = new Blake3();
         hasher.update("This is a string".getBytes());
@@ -13,7 +14,7 @@ public class Main {
         System.out.println("Success: " + hexhash);
 
         // Hashing files
-        // Warning: Very slow due to lack of optimizations :c
+        // Warning: Very slow for large files due to lack of optimizations :c
         String filename = "LICENSE";
         try {
             Blake3 fileHasher = new Blake3();
