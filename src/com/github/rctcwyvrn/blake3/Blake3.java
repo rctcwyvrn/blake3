@@ -1,5 +1,6 @@
-package com.github.rctcwyvrn.blake3java;
+package com.github.rctcwyvrn.blake3;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -20,31 +21,31 @@ public class Blake3 {
     private static final int BLOCK_LEN = 64;
     private static final int CHUNK_LEN = 1024;
 
-    private static final long CHUNK_START = 1L;
-    private static final long CHUNK_END = 2L;
-    private static final long PARENT = 4L;
-    private static final long ROOT = 8L;
-    private static final long KEYED_HASH = 16L;
-    private static final long DERIVE_KEY_CONTEXT = 32L;
-    private static final long DERIVE_KEY_MATERIAL = 64L;
+    private static final int CHUNK_START = 1;
+    private static final int CHUNK_END = 2;
+    private static final int PARENT = 4;
+    private static final int ROOT = 8;
+    private static final int KEYED_HASH = 16;
+    private static final int DERIVE_KEY_CONTEXT = 32;
+    private static final int DERIVE_KEY_MATERIAL = 64;
 
-    private static final long[] IV = {
-            0x6A09E667L, 0xBB67AE85L, 0x3C6EF372L, 0xA54FF53AL, 0x510E527FL, 0x9B05688CL, 0x1F83D9ABL, 0x5BE0CD19L
+    private static final int[] IV = {
+            0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A, 0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
     };
 
     private static final int[] MSG_PERMUTATION = {
             2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8
     };
 
-    private static long wrappingAdd(long a, long b){
-        return (a + b) % 0x100000000L;
+    private static int wrappingAdd(int a, int b){
+        return (a + b);
     }
 
-    private static long rotateRight(long x, int len){
-        return ((x >> len) | (x << (32 - len))) & 0xffffffffL;
+    private static int rotateRight(int x, int len){
+        return (x >>> len) | (x << (32 - len));
     }
 
-    private static void g(long[] state, int a, int b, int c, int d, long mx, long my){
+    private static void g(int[] state, int a, int b, int c, int d, int mx, int my){
         state[a] = wrappingAdd(wrappingAdd(state[a], state[b]), mx);
         state[d] = rotateRight((state[d] ^ state[a]), 16);
         state[c] = wrappingAdd(state[c], state[d]);
@@ -55,7 +56,7 @@ public class Blake3 {
         state[b] = rotateRight((state[b] ^ state[c]), 7);
     }
 
-    private static void roundFn(long[] state, long[] m){
+    private static void roundFn(int[] state, int[] m){
         // Mix columns
         g(state,0,4,8,12,m[0],m[1]);
         g(state,1,5,9,13,m[2],m[3]);
@@ -69,18 +70,18 @@ public class Blake3 {
         g(state,3,4,9,14,m[14],m[15]);
     }
 
-    private static long[] permute(long[] m){
-        long[] permuted = new long[16];
+    private static int[] permute(int[] m){
+        int[] permuted = new int[16];
         for(int i = 0;i<16;i++){
             permuted[i] = m[MSG_PERMUTATION[i]];
         }
         return permuted;
     }
 
-    private static long[] compress(long[] chainingValue, long[] blockWords, long counter, long blockLen, long flags){
-        long counterInt =  counter & 0xffffffffL;
-        long counterShift = (counter >> 32) & 0xffffffffL;
-        long[] state = {
+    private static int[] compress(int[] chainingValue, int[] blockWords, long counter, int blockLen, int flags){
+        int counterInt = (int) (counter & 0xffffffffL);
+        int counterShift = (int) ((counter >> 32) & 0xffffffffL);
+        int[] state = {
                 chainingValue[0],
                 chainingValue[1],
                 chainingValue[2],
@@ -119,16 +120,19 @@ public class Blake3 {
         return state;
     }
 
-    private static long[] wordsFromLEBytes(short[] bytes){
+    private static int[] wordsFromLEBytes(byte[] bytes){
         if ((bytes.length != 64)) throw new AssertionError();
-        long[] words = new long[16];
-
-        for(int i=0; i<64; i+=4) {
-            words[i/4] = ((bytes[i + 3] << 24) +
-                    (bytes[i + 2] << 16) +
-                    (bytes[i + 1] << 8) +
-                    (bytes[i])) & 0xffffffffL;
+        int[] words = new int[16];
+        ByteBuffer buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+        for(int i=0; i<16; i++){
+            words[i] = buf.getInt();
         }
+//        for(int i=0; i<64; i+=4) {
+//            words[i/4] = (bytes[i + 3] << 24) +
+//                    (bytes[i + 2] << 16) +
+//                    (bytes[i + 1] << 8) +
+//                    (bytes[i]);
+//        }
         return words;
     }
 
@@ -136,13 +140,13 @@ public class Blake3 {
     // Is either chained into the next node using chainingValue()
     // Or used to calculate the hash digest using rootOutputBytes()
     private static class Node {
-        long[] inputChainingValue;
-        long[] blockWords;
+        int[] inputChainingValue;
+        int[] blockWords;
         long counter;
-        long blockLen;
-        long flags;
+        int blockLen;
+        int flags;
 
-        private Node(long[] inputChainingValue, long[] blockWords, long counter, long blockLen, long flags) {
+        private Node(int[] inputChainingValue, int[] blockWords, long counter, int blockLen, int flags) {
             this.inputChainingValue = inputChainingValue;
             this.blockWords = blockWords;
             this.counter = counter;
@@ -151,27 +155,26 @@ public class Blake3 {
         }
 
         // Return the 8 int CV
-        private long[] chainingValue(){
-            long blockLenLong = blockLen;
+        private int[] chainingValue(){
             return Arrays.copyOfRange(
-                    compress(inputChainingValue, blockWords, counter, blockLenLong, flags),
+                    compress(inputChainingValue, blockWords, counter, blockLen, flags),
                     0,8);
         }
 
-        private short[] rootOutputBytes(int outLen){
+        private byte[] rootOutputBytes(int outLen){
             int outputCounter = 0;
             int outputsNeeded = Math.floorDiv(outLen,(2*OUT_LEN)) + 1;
-            short[] hash = new short[outLen];
+            byte[] hash = new byte[outLen];
             int i = 0;
             while(outputCounter < outputsNeeded){
-                long[] words = compress(inputChainingValue, blockWords, outputCounter, blockLen & 0xffffffffL,flags | ROOT );
+                int[] words = compress(inputChainingValue, blockWords, outputCounter, blockLen,flags | ROOT );
 
-                for(long word: words){
+                for(int word: words){
                     for(byte b: ByteBuffer.allocate(4)
                             .order(ByteOrder.LITTLE_ENDIAN)
-                            .putInt((int) (word & 0xffffffffL))
+                            .putInt(word)
                             .array()){
-                        hash[i] = (short) (b & 0xff);
+                        hash[i] = b;
                         i+=1;
                         if(i == outLen){
                             return hash;
@@ -180,22 +183,20 @@ public class Blake3 {
                 }
                 outputCounter+=1;
             }
-            System.out.println("Uhoh, pretty sure this is never supposed to get here");
-            System.exit(1);
-            return null;
+            throw new IllegalStateException("Uhoh");
         }
     }
 
     // Helper object for creating new Nodes and chaining them
     private static class ChunkState {
-        long[] chainingValue;
-        int chunkCounter;
-        short[] block = new short[BLOCK_LEN];
+        int[] chainingValue;
+        long chunkCounter;
+        byte[] block = new byte[BLOCK_LEN];
         byte blockLen = 0;
         byte blocksCompressed = 0;
-        long flags;
+        int flags;
 
-        public ChunkState(long[] key, int chunkCounter, long flags){
+        public ChunkState(int[] key, long chunkCounter, int flags){
             this.chainingValue = key;
             this.chunkCounter = chunkCounter;
             this.flags = flags;
@@ -205,21 +206,21 @@ public class Blake3 {
             return BLOCK_LEN * blocksCompressed + blockLen;
         }
 
-        private long startFlag(){
+        private int startFlag(){
             return blocksCompressed == 0? CHUNK_START: 0;
         }
 
-        private void update(short[] input) {
+        private void update(byte[] input) {
             while (input.length != 0) {
 
                 // Chain the next 64 byte block into this chunk/node
                 if (blockLen == BLOCK_LEN) {
-                    long[] blockWords = wordsFromLEBytes(block);
+                    int[] blockWords = wordsFromLEBytes(block);
                     this.chainingValue = Arrays.copyOfRange(
                             compress(this.chainingValue, blockWords, this.chunkCounter, BLOCK_LEN,this.flags | this.startFlag()),
                             0, 8);
                     blocksCompressed += 1;
-                    this.block = new short[BLOCK_LEN];
+                    this.block = new byte[BLOCK_LEN];
                     this.blockLen = 0;
                 }
 
@@ -240,22 +241,22 @@ public class Blake3 {
 
     // Hasher
     private ChunkState chunkState;
-    private long[] key;
-    private final long[][] cvStack = new long[54][];
+    private int[] key;
+    private final int[][] cvStack = new int[54][];
     private byte cvStackLen = 0;
-    private long flags;
+    private int flags;
 
     public Blake3(){
         this(IV,0);
     }
 
-    public Blake3(long[] key, long flags){
+    public Blake3(int[] key, int flags){
         this.chunkState = new ChunkState(key, 0, flags);
         this.key = key;
         this.flags = flags;
     }
 
-    public Blake3(short[] key){
+    public Blake3(byte[] key){
         this(wordsFromLEBytes(key), KEYED_HASH);
     }
 
@@ -263,36 +264,36 @@ public class Blake3 {
         Blake3 contextHasher = new Blake3(IV, DERIVE_KEY_CONTEXT);
     }
 
-    private void pushStack(long[] cv){
+    private void pushStack(int[] cv){
         this.cvStack[this.cvStackLen] = cv;
         cvStackLen+=1;
     }
 
-    private long[] popStack(){
+    private int[] popStack(){
         this.cvStackLen-=1;
         return cvStack[cvStackLen];
     }
 
     // Combines the chaining values of two children to create the parent node
-    private static Node parentNode(long[] leftChildCV, long[] rightChildCV, long[] key, long flags){
-        long[] blockWords = new long[16];
+    private static Node parentNode(int[] leftChildCV, int[] rightChildCV, int[] key, int flags){
+        int[] blockWords = new int[16];
         int i = 0;
-        for(long x: leftChildCV){
+        for(int x: leftChildCV){
             blockWords[i] = x;
             i+=1;
         }
-        for(long x: rightChildCV){
+        for(int x: rightChildCV){
             blockWords[i] = x;
             i+=1;
         }
         return new Node(key, blockWords, 0, BLOCK_LEN, PARENT | flags);
     }
 
-    private static long[] parentCV(long[] leftChildCV, long[] rightChildCV, long[] key, long flags){
+    private static int[] parentCV(int[] leftChildCV, int[] rightChildCV, int[] key, int flags){
         return parentNode(leftChildCV, rightChildCV, key, flags).chainingValue();
     }
 
-    private void addChunkChainingValue(long[] newCV, long totalChunks){
+    private void addChunkChainingValue(int[] newCV, long totalChunks){
         while((totalChunks & 1) == 0){
             newCV = parentCV(popStack(), newCV, key, flags);
             totalChunks >>=1;
@@ -300,30 +301,17 @@ public class Blake3 {
         pushStack(newCV);
     }
 
-    public void update(String input){
-        byte[] inputBytes = input.getBytes();
-        short[] converted = new short[inputBytes.length];
-        for(int i = 0; i < inputBytes.length; i++){
-            converted[i] = (short) (0xff & inputBytes[i]);
-        }
-        updateRaw(converted);
+    public void update(File file) throws IOException {
+        update(Files.readAllBytes(file.toPath()));
     }
 
-    public void updateFile(String filename) throws IOException {
-        byte[] fileContent = Files.readAllBytes(Paths.get(filename));
-        short[] converted = new short[fileContent.length];
-        for(int i = 0; i<fileContent.length; i++){
-            converted[i] = (short) (0xff & fileContent[i]);
-        }
-        updateRaw(converted);
-    }
-    private void updateRaw(short[] input){
+    public void update(byte[] input){
         while(input.length != 0) {
 
             // If this chunk has chained in 16 64 bytes of input, add it's CV to the stack
             if (chunkState.len() == CHUNK_LEN) {
-                long[] chunkCV = chunkState.createNode().chainingValue();
-                int totalChunks = chunkState.chunkCounter + 1;
+                int[] chunkCV = chunkState.createNode().chainingValue();
+                long totalChunks = chunkState.chunkCounter + 1;
                 addChunkChainingValue(chunkCV, totalChunks);
                 chunkState = new ChunkState(key, totalChunks, flags);
             }
@@ -335,7 +323,7 @@ public class Blake3 {
         }
     }
 
-    public short[] digest(int hashLen){
+    public byte[] digest(int hashLen){
         Node node = this.chunkState.createNode();
         int parentNodesRemaining = cvStackLen;
         while(parentNodesRemaining > 0){
@@ -358,7 +346,7 @@ public class Blake3 {
         return hexdigest(32);
     }
 
-    private static String bytesToHex(short[] bytes) {
+    private static String bytesToHex(byte[] bytes) {
         char[] hexChars = new char[bytes.length * 2];
         for (int j = 0; j < bytes.length; j++) {
             int v = bytes[j] & 0xFF;
