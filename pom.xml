@@ -9,8 +9,11 @@
         <maven.compiler.source>1.11</maven.compiler.source>
         <maven.compiler.target>1.11</maven.compiler.target>
     </properties>
+
     <name>blake3</name>
     <description>An unoptimized BLAKE3 implementation in Java</description>
+    <url>https://github.com/rctcwyvrn/blake3</url>
+
     <licenses>
         <license>
             <name>MIT</name>
