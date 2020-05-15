@@ -243,39 +243,27 @@ public class Blake3 {
     private byte cvStackLen = 0;
     private int flags;
 
-    private void initialize(int[] key, int flags){
-        this.chunkState = new ChunkState(key, 0, flags);
-        this.key = key;
-        this.flags = flags;
-    }
-
-    /**
-     * Construct a default blake3 hasher
-     */
-    public Blake3(){
+    private Blake3(){
         initialize(IV,0);
     }
 
-    /**
-     * Construct a new blake3 keyed hasher
-     * @param key The 32 byte key
-     * @throws IllegalStateException If the key is not 32 bytes
-     */
-    public Blake3(byte[] key){
-        if(!(key.length == KEY_LEN)) throw new IllegalStateException("Invalid key length");
+    private Blake3(byte[] key){
         initialize(wordsFromLEBytes(key), KEYED_HASH);
     }
 
-    /**
-     * Construct a new blake3 key derivation hasher
-     * @param context Context string used to derive keys. The context string should be hardcoded, globally unique, and application-specific
-     */
-    public Blake3(String context){
+
+    private Blake3(String context){
         Blake3 contextHasher = new Blake3();
         contextHasher.initialize(IV, DERIVE_KEY_CONTEXT);
         contextHasher.update(context.getBytes(StandardCharsets.UTF_8));
         int[] contextKey = wordsFromLEBytes(contextHasher.digest());
         initialize(contextKey, DERIVE_KEY_MATERIAL);
+    }
+
+    private void initialize(int[] key, int flags){
+        this.chunkState = new ChunkState(key, 0, flags);
+        this.key = key;
+        this.flags = flags;
     }
 
     /**
@@ -411,5 +399,33 @@ public class Blake3 {
             hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
         }
         return new String(hexChars);
+    }
+
+    /**
+     * Construct a BLAKE3 blake3 hasher
+     */
+    public static Blake3 newInstance(){
+        return new Blake3();
+    }
+
+    /**
+     * Construct a new BLAKE3 keyed mode hasher
+     * @param key The 32 byte key
+     * @throws IllegalStateException If the key is not 32 bytes
+     */
+    public static Blake3 newKeyedHasher(byte[] key){
+        if(!(key.length == KEY_LEN)) throw new IllegalStateException("Invalid key length");
+        return new Blake3(key);
+    }
+
+    /**
+     * Construct a new BLAKE3 key derivation mode hasher
+     * The context string should be hardcoded, globally unique, and application-specific. <br><br>
+     * A good default format is <i>"[application] [commit timestamp] [purpose]"</i>, <br>
+     * eg "example.com 2019-12-25 16:18:03 session tokens v1"
+     * @param context Context string used to derive keys.
+     */
+    public static Blake3 newKeyDerivationHasher(String context){
+        return new Blake3(context);
     }
 }
