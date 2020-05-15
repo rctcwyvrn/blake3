@@ -11,14 +11,14 @@ An unoptimized translation of the blake3 reference implementation from rust to j
 ```
 ### Examples
 ```java
-        // Hashing strings
-        Blake3 hasher = new Blake3();
+        // Hashing bytes
+        Blake3 hasher = Blake3.newInstance();
         hasher.update("This is a string".getBytes());
         String hexhash = hasher.hexdigest();
 ```
 ```java
         // Hashing files
-        Blake3 hasher = new Blake3();
+        Blake3 hasher = Blake3.newInstance();
         hasher.update(new File(filename));
         String filehash = hasher.hexdigest();
 ```
