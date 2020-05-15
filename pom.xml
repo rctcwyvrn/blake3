@@ -4,7 +4,7 @@
 
     <groupId>io.github.rctcwyvrn</groupId>
     <artifactId>blake3</artifactId>
-    <version>1.1-SNAPSHOT</version>
+    <version>1.1</version>
     <properties>
         <maven.compiler.source>1.11</maven.compiler.source>
         <maven.compiler.target>1.11</maven.compiler.target>
@@ -124,7 +124,7 @@
         <connection>scm:git:git://github.com/rctcwyvrn/blake3.git</connection>
         <developerConnection>scm:git:git@github.com:rctcwyvrn/blake3.git</developerConnection>
         <url>https://github.com/rctcwyvrn/blake3</url>
-        <tag>blake3-1.0</tag>
+        <tag>blake3-1.1</tag>
     </scm>
 
     <profiles>
