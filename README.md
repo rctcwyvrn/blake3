@@ -1,6 +1,14 @@
 BLAKE3 in Java
 ---
 An unoptimized translation of the blake3 reference implementation from rust to java.
+### Maven
+```xml
+<dependency>
+  <groupId>io.github.rctcwyvrn</groupId>
+  <artifactId>blake3</artifactId>
+  <version>1.3</version>
+</dependency>
+```
 ### Examples
 ```java
         // Hashing strings
