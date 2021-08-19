@@ -362,8 +362,10 @@ return this;
     }
 
     private int[] popStack(){
-        this.cvStackLen-=1;
-        return cvStack[cvStackLen];
+        int[] toRet=cvStack[cvStackLen];
+cvStack[cvStackLen]=null;
+cvStackLen--;
+return toRet;
     }
 
     // Combines the chaining values of two children to create the parent node
