@@ -19,7 +19,7 @@ public class Blake3 {
 
     private static final int DEFAULT_HASH_LEN = 32;
     private static final int OUT_LEN = 32;
-    private static final int KEY_LEN = 32;
+    public static final int KEY_LEN = 32;
     private static final int BLOCK_LEN = 64;
     private static final int CHUNK_LEN = 1024;
 
@@ -271,7 +271,7 @@ public class Blake3 {
      * @param file File to be added
      * @throws IOException If the file does not exist
      */
-    public void update(File file) throws IOException {
+    public Blake3 update(File file) throws IOException {
         // Update the hasher 4kb at a time to avoid memory issues when hashing large files
         try(InputStream ios = new FileInputStream(file)){
             byte[] buffer = new byte[4096];
@@ -284,13 +284,14 @@ public class Blake3 {
                 }
             }
         }
+return this;
     }
 
     /**
      * Appends new data to the hash tree
      * @param input Data to be added
      */
-    public void update(byte[] input){
+    public Blake3 update(byte[] input){
         int currPos = 0;
         while(currPos < input.length) {
 
@@ -307,6 +308,7 @@ public class Blake3 {
             chunkState.update(Arrays.copyOfRange(input, currPos, currPos + take));
             currPos+=take;
         }
+return this;
     }
 
     /**
@@ -360,8 +362,10 @@ public class Blake3 {
     }
 
     private int[] popStack(){
-        this.cvStackLen-=1;
-        return cvStack[cvStackLen];
+        int[] toRet=cvStack[cvStackLen];
+cvStack[cvStackLen]=null;
+cvStackLen--;
+return toRet;
     }
 
     // Combines the chaining values of two children to create the parent node
@@ -414,7 +418,7 @@ public class Blake3 {
      * @throws IllegalStateException If the key is not 32 bytes
      */
     public static Blake3 newKeyedHasher(byte[] key){
-        if(!(key.length == KEY_LEN)) throw new IllegalStateException("Invalid key length");
+        if(!(key.length == KEY_LEN)) throw new IllegalArgumentException("Invalid key length");
         return new Blake3(key);
     }
 
